@@ -1,8 +1,8 @@
 ﻿@model LogWebViewer.Models.LogPageModel
 
-@if (!Model.Logs.Any())
+@if (Model.Logs == null || !Model.Logs.Any())
 {
-    <div class="card">No logs found.</div>
+    <div class="card"><em>No log entries found.</em></div>
 }
 else
 {
@@ -11,8 +11,6 @@ else
             <tr>
                 <th>Time</th>
                 <th>Level</th>
-                @* <th>Source</th> *@
-                @* <th>Function</th> *@
                 <th>Description</th>
             </tr>
         </thead>
@@ -22,9 +20,7 @@ else
                 <tr class="level-@log.Level">
                     <td>@log.Time</td>
                     <td>@log.Level</td>
-                    @* <td>@log.Source</td> *@
-                    @* <td>@log.Function</td> *@
-                    <td>@Html.Raw(log.Description)</td>
+                    <td>@log.Description</td>
                 </tr>
             }
         </tbody>
@@ -32,17 +28,30 @@ else
 
     @if (Model.TotalPages > 1)
     {
-        <div class="paging card">
-            @for (int i = 1; i <= Model.TotalPages; i++)
+        <div class="paging card flex">
+            @{
+                int current = Model.CurrentPage;
+                int total = Model.TotalPages;
+            }
+            @if (current > 1)
             {
-                if (i == Model.CurrentPage)
+                <a href="#" data-page="@(current - 1)">Prev</a>
+            }
+            @for (int i = 1; i <= total; i++)
+            {
+                if (i == current)
                 {
                     <strong>@i</strong>
                 }
                 else
                 {
+
                     <a href="#" data-page="@i">@i</a>
                 }
+            }
+            @if (current < total)
+            {
+                <a href="#" data-page="@(current + 1)">Next</a>
             }
         </div>
     }

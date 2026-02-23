@@ -19,31 +19,42 @@ namespace LogWebViewer.Controllers
         private const int PageSize = 150;
         private string JsonPath => Path.Combine(Path.GetTempPath(), "logstream.json");
 
+        // --------------------------
+        // Index page
+        // --------------------------
         [HttpGet]
         public IActionResult Index(string area = null, string date = null)
         {
             var model = new LogPageModel();
-            ViewBag.LogNotFound = false; // default
+            ViewBag.LogNotFound = false;
 
             if (!string.IsNullOrEmpty(area) && !string.IsNullOrEmpty(date))
             {
                 area = area.Trim('\'', '"');
-                var logFilePath = Path.Combine(@"E:\shr\lislog", area, $"{date}.log");
+                var logFolder = Path.Combine(@"E:\shr\lislog", area);
 
-                if (System.IO.File.Exists(logFilePath))
+                if (Directory.Exists(logFolder))
                 {
-                    try
+                    // Find log file by date: match *date*.log
+                    var files = Directory.GetFiles(logFolder, $"*{date}*.log");
+                    if (files.Length > 0)
                     {
-                        IntPtr ptr = ReadBinaryLog(logFilePath);
-                        string json = Marshal.PtrToStringAnsi(ptr) ?? "[]";
-                        System.IO.File.WriteAllText(JsonPath, json);
+                        var logFilePath = files[0];
+                        try
+                        {
+                            IntPtr ptr = ReadBinaryLog(logFilePath);
+                            string json = Marshal.PtrToStringAnsi(ptr) ?? "[]";
+                            System.IO.File.WriteAllText(JsonPath, json);
 
-                        // Load first page automatically
-                        model = GetLogsPage(1, "", "", null, null);
+                            model = GetLogsPage(1, "", "", null, null);
+                        }
+                        catch
+                        {
+                            ViewBag.LogNotFound = true;
+                        }
                     }
-                    catch
+                    else
                     {
-                        // On error, consider as not found
                         ViewBag.LogNotFound = true;
                     }
                 }
@@ -55,6 +66,10 @@ namespace LogWebViewer.Controllers
 
             return View(model);
         }
+
+        // --------------------------
+        // Upload log file
+        // --------------------------
         [HttpPost]
         [DisableRequestSizeLimit]
         public async Task<IActionResult> Upload(IFormFile logFile)
@@ -83,16 +98,13 @@ namespace LogWebViewer.Controllers
             }
         }
 
+        // --------------------------
+        // AJAX paging
+        // --------------------------
         [HttpGet]
-        public IActionResult Page(
-            int page = 1,
-            string level = "",
-            string description = "",
-            TimeSpan? fromTime = null,
-            TimeSpan? toTime = null)
+        public IActionResult Page(int page = 1, string level = "", string description = "", TimeSpan? fromTime = null, TimeSpan? toTime = null)
         {
             var model = GetLogsPage(page, level, description, fromTime, toTime);
-
             if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
                 return PartialView("_LogTablePartial", model);
 
@@ -100,7 +112,39 @@ namespace LogWebViewer.Controllers
         }
 
         // --------------------------
-        // Helper: Load logs page
+        // Export to TXT
+        // --------------------------
+        [HttpGet]
+        public IActionResult ExportTxt(string area, string date)
+        {
+            if (string.IsNullOrEmpty(area) || string.IsNullOrEmpty(date))
+                return BadRequest("Area or date missing");
+
+            area = area.Trim('\'', '"');
+            var logFolder = Path.Combine(@"E:\shr\lislog", area);
+            if (!Directory.Exists(logFolder))
+                return NotFound("Area folder not found");
+
+            var files = Directory.GetFiles(logFolder, $"*{date}*.log");
+            if (files.Length == 0)
+                return NotFound("Log file not found");
+
+            var logFilePath = files[0];
+            var fileName = $"{area}_{date}.txt";
+
+            try
+            {
+                byte[] fileBytes = System.IO.File.ReadAllBytes(logFilePath);
+                return File(fileBytes, "text/plain", fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Export failed: {ex.Message}");
+            }
+        }
+
+        // --------------------------
+        // Helper: paginate logs
         // --------------------------
         private LogPageModel GetLogsPage(int page, string level, string description, TimeSpan? fromTime, TimeSpan? toTime)
         {
