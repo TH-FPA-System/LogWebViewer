@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 using LogWebViewer.Models;
 using Newtonsoft.Json;
 
@@ -17,6 +16,7 @@ namespace LogWebViewer.Controllers
         private static extern IntPtr ReadBinaryLog(string fileName);
 
         private const int PageSize = 50;
+        private string JsonPath => Path.Combine(Path.GetTempPath(), "logstream.json");
 
         [HttpGet]
         public IActionResult Index()
@@ -29,140 +29,66 @@ namespace LogWebViewer.Controllers
         public async Task<IActionResult> Upload(IFormFile logFile)
         {
             if (logFile == null || logFile.Length == 0)
-            {
-                ViewBag.Error = "Please select a valid log file.";
-                return View("Index", new LogPageModel());
-            }
+                return BadRequest(new { message = "No file selected." });
 
-            if (!Path.GetExtension(logFile.FileName)
-                .Equals(".log", StringComparison.OrdinalIgnoreCase))
-            {
-                ViewBag.Error = "Only .log files are allowed.";
-                return View("Index", new LogPageModel());
-            }
+            if (!Path.GetExtension(logFile.FileName).Equals(".log", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { message = "Only .log files are allowed." });
 
             try
             {
-                var tempLogPath = Path.Combine(Path.GetTempPath(),
-                    Path.GetRandomFileName() + ".log");
-
-                await using (var fs = new FileStream(tempLogPath,
-                    FileMode.Create,
-                    FileAccess.Write,
-                    FileShare.None,
-                    bufferSize: 1024 * 1024,
-                    useAsync: true))
-                {
+                var tempLogPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".log");
+                await using (var fs = new FileStream(tempLogPath, FileMode.Create, FileAccess.Write, FileShare.None, 1024 * 1024, true))
                     await logFile.CopyToAsync(fs);
-                }
 
-                // Heavy work AFTER upload
-                await Task.Run(() =>
-                {
-                    IntPtr ptr = ReadBinaryLog(tempLogPath);
-                    string json = Marshal.PtrToStringAnsi(ptr) ?? "[]";
-                    json = EscapeInvalidJson(json);
+                IntPtr ptr = ReadBinaryLog(tempLogPath);
+                string json = Marshal.PtrToStringAnsi(ptr) ?? "[]";
+                json = EscapeInvalidJson(json);
+                System.IO.File.WriteAllText(JsonPath, json);
 
-                    var jsonPath = Path.Combine(Path.GetTempPath(), "logstream.json");
-                    System.IO.File.WriteAllText(jsonPath, json);
-                });
-
-                return RedirectToAction(nameof(Page), new { page = 1 });
+                return Ok(new { success = true });
             }
             catch (Exception ex)
             {
-                ViewBag.Error = $"Upload failed: {ex.Message}";
-                return View("Index", new LogPageModel());
+                return StatusCode(500, new { message = $"Upload failed: {ex.Message}" });
             }
         }
 
         [HttpGet]
-        public IActionResult Table()
+        public IActionResult Page(int page = 1, string level = "", string source = "", string function = "")
         {
-            var jsonPath = Path.Combine(Path.GetTempPath(), "logstream.json");
-            var logs = new List<LogEntry>();
-
-            if (System.IO.File.Exists(jsonPath))
-            {
-                using var sr = new StreamReader(jsonPath);
-                using var reader = new JsonTextReader(sr);
-                var serializer = new JsonSerializer();
-
-                if (reader.Read() && reader.TokenType == JsonToken.StartArray)
-                {
-                    while (reader.Read())
-                    {
-                        if (reader.TokenType == JsonToken.StartObject)
-                        {
-                            var log = serializer.Deserialize<LogEntry>(reader);
-                            logs.Add(log);
-                        }
-                        else if (reader.TokenType == JsonToken.EndArray)
-                            break;
-                    }
-                }
-            }
-
-            var model = new LogPageModel
-            {
-                Logs = logs,
-                CurrentPage = 1,
-                TotalPages = 1
-            };
-
-            return PartialView("_LogTablePartial", model);
-        }
-
-        [HttpGet]
-        public IActionResult Page(int page = 1,
-                                  string level = "",
-                                  string source = "",
-                                  string function = "")
-        {
-            var jsonPath = Path.Combine(Path.GetTempPath(), "logstream.json");
-            if (!System.IO.File.Exists(jsonPath))
-            {
-                ViewBag.Error = "No uploaded log file found. Please upload first.";
-                return View("Index", new LogPageModel());
-            }
+            if (!System.IO.File.Exists(JsonPath))
+                return View("Index", new LogPageModel { Logs = new List<LogEntry>() });
 
             var logs = new List<LogEntry>();
             int totalLogs = 0;
 
-            using var sr = new StreamReader(jsonPath);
+            using var sr = new StreamReader(JsonPath);
             using var reader = new JsonTextReader(sr);
             var serializer = new JsonSerializer();
 
             if (reader.Read() && reader.TokenType == JsonToken.StartArray)
             {
-                int skip = (page - 1) * PageSize;
                 int index = 0;
+                int skip = (page - 1) * PageSize;
 
                 while (reader.Read())
                 {
-                    if (reader.TokenType == JsonToken.StartObject)
-                    {
-                        var log = serializer.Deserialize<LogEntry>(reader);
+                    if (reader.TokenType != JsonToken.StartObject) continue;
 
-                        if (!string.IsNullOrEmpty(level) &&
-                            !string.Equals(log.Level, level, StringComparison.OrdinalIgnoreCase))
-                            continue;
+                    var log = serializer.Deserialize<LogEntry>(reader);
 
-                        if (!string.IsNullOrEmpty(source) &&
-                            !log.Source.Contains(source, StringComparison.OrdinalIgnoreCase))
-                            continue;
+                    // Filtering
+                    if (!string.IsNullOrEmpty(level) && !string.Equals(log.Level, level, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (!string.IsNullOrEmpty(source) && !log.Source.Contains(source, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (!string.IsNullOrEmpty(function) && !log.Function.Contains(function, StringComparison.OrdinalIgnoreCase))
+                        continue;
 
-                        if (!string.IsNullOrEmpty(function) &&
-                            !log.Function.Contains(function, StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        totalLogs++;
-                        if (index >= skip && logs.Count < PageSize)
-                            logs.Add(log);
-                        index++;
-                    }
-                    else if (reader.TokenType == JsonToken.EndArray)
-                        break;
+                    totalLogs++;
+                    if (index >= skip && logs.Count < PageSize)
+                        logs.Add(log);
+                    index++;
                 }
             }
 
@@ -175,6 +101,9 @@ namespace LogWebViewer.Controllers
                 FilterSource = source,
                 FilterFunction = function
             };
+
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                return PartialView("_LogTablePartial", model);
 
             return View("Index", model);
         }
