@@ -42,7 +42,8 @@ namespace LogWebViewer.Controllers
 
                 IntPtr ptr = ReadBinaryLog(tempLogPath);
                 string json = Marshal.PtrToStringAnsi(ptr) ?? "[]";
-                json = EscapeInvalidJson(json);
+
+                // Save raw JSON (no sanitization needed)
                 System.IO.File.WriteAllText(JsonPath, json);
 
                 return Ok(new { success = true });
@@ -52,13 +53,14 @@ namespace LogWebViewer.Controllers
                 return StatusCode(500, new { message = $"Upload failed: {ex.Message}" });
             }
         }
+
         [HttpGet]
         public IActionResult Page(
-     int page = 1,
-     string level = "",
-     string description = "",
-     TimeSpan? fromTime = null,
-     TimeSpan? toTime = null)
+            int page = 1,
+            string level = "",
+            string description = "",
+            TimeSpan? fromTime = null,
+            TimeSpan? toTime = null)
         {
             if (!System.IO.File.Exists(JsonPath))
                 return View("Index", new LogPageModel { Logs = new List<LogEntry>() });
@@ -66,48 +68,69 @@ namespace LogWebViewer.Controllers
             var logs = new List<LogEntry>();
             int totalLogs = 0;
 
-            using var sr = new StreamReader(JsonPath);
-            using var reader = new JsonTextReader(sr);
-            var serializer = new JsonSerializer();
-
-            if (reader.Read() && reader.TokenType == JsonToken.StartArray)
+            try
             {
-                int index = 0;
-                int skip = (page - 1) * PageSize;
+                using var sr = new StreamReader(JsonPath);
+                using var reader = new JsonTextReader(sr);
+                var serializer = new JsonSerializer();
 
-                while (reader.Read())
+                if (reader.Read() && reader.TokenType == JsonToken.StartArray)
                 {
-                    if (reader.TokenType != JsonToken.StartObject) continue;
+                    int index = 0;
+                    int skip = (page - 1) * PageSize;
 
-                    var log = serializer.Deserialize<LogEntry>(reader);
-
-                    // Level filter
-                    if (!string.IsNullOrEmpty(level) &&
-                        !string.Equals(log.Level, level, StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    // Description filter
-                    if (!string.IsNullOrEmpty(description) &&
-                        !log.Description.Contains(description, StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    // Time-of-day filter
-                    if (DateTime.TryParse(log.Time, out var logDateTime))
+                    while (reader.Read())
                     {
-                        var logTime = logDateTime.TimeOfDay;
+                        if (reader.TokenType != JsonToken.StartObject) continue;
 
-                        if (fromTime.HasValue && logTime < fromTime.Value)
+                        LogEntry log = null;
+                        try
+                        {
+                            log = serializer.Deserialize<LogEntry>(reader);
+                        }
+                        catch
+                        {
+                            // Skip corrupted entry
+                            continue;
+                        }
+
+                        if (log == null) continue;
+
+                        // Level filter
+                        if (!string.IsNullOrEmpty(level) &&
+                            !string.Equals(log.Level, level, StringComparison.OrdinalIgnoreCase))
                             continue;
 
-                        if (toTime.HasValue && logTime > toTime.Value)
+                        // Description filter
+                        if (!string.IsNullOrEmpty(description) &&
+                            !log.Description.Contains(description, StringComparison.OrdinalIgnoreCase))
                             continue;
+
+                        // Time-of-day filter
+                        if (DateTime.TryParse(log.Time, out var logDateTime))
+                        {
+                            var logTime = logDateTime.TimeOfDay;
+
+                            if (fromTime.HasValue && logTime < fromTime.Value)
+                                continue;
+
+                            if (toTime.HasValue && logTime > toTime.Value)
+                                continue;
+                        }
+
+                        totalLogs++;
+                        if (index >= skip && logs.Count < PageSize)
+                            logs.Add(log);
+
+                        index++;
                     }
-
-                    totalLogs++;
-                    if (index >= skip && logs.Count < PageSize)
-                        logs.Add(log);
-                    index++;
                 }
+            }
+            catch
+            {
+                // If the file is completely corrupted, return empty list
+                logs = new List<LogEntry>();
+                totalLogs = 0;
             }
 
             var model = new LogPageModel
@@ -125,15 +148,6 @@ namespace LogWebViewer.Controllers
                 return PartialView("_LogTablePartial", model);
 
             return View("Index", model);
-        }
-
-        private string EscapeInvalidJson(string input)
-        {
-            return string.Concat(input.Select(c =>
-                (char.IsControl(c) && c != '\r' && c != '\n')
-                    ? $"\\u{((int)c):x4}"
-                    : c.ToString()
-            ));
         }
     }
 }
