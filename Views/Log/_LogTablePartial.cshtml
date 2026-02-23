@@ -1,0 +1,49 @@
+﻿@model LogWebViewer.Models.LogPageModel
+
+@if (!Model.Logs.Any())
+{
+    <div class="card">No logs found.</div>
+}
+else
+{
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Level</th>
+                @* <th>Source</th> *@
+                @* <th>Function</th> *@
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var log in Model.Logs)
+            {
+                <tr class="level-@log.Level">
+                    <td>@log.Time</td>
+                    <td>@log.Level</td>
+                    @* <td>@log.Source</td> *@
+                    @* <td>@log.Function</td> *@
+                    <td>@Html.Raw(log.Description)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (Model.TotalPages > 1)
+    {
+        <div class="paging card">
+            @for (int i = 1; i <= Model.TotalPages; i++)
+            {
+                if (i == Model.CurrentPage)
+                {
+                    <strong>@i</strong>
+                }
+                else
+                {
+                    <a href="#" data-page="@i">@i</a>
+                }
+            }
+        </div>
+    }
+}
