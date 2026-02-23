@@ -33,3 +33,117 @@ thead {
 .table-primary {
     background-color: #cce5ff;
 }
+body {
+    font-family: Arial;
+    margin: 20px;
+    background: #f5f7fa;
+}
+
+h1 {
+    color: #34495E;
+}
+
+.box {
+    padding: 12px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    background: white;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+}
+
+th {
+    background-color: #007ACC;
+    color: white;
+}
+
+tr:nth-child(even) {
+    background-color: #f2f2f2;
+}
+
+.level-ERROR {
+    background-color: #fdd;
+    color: #900;
+}
+
+.level-WARN {
+    background-color: #ffe;
+    color: #aa0;
+}
+
+.level-INFO {
+    background-color: #eef;
+    color: #007ACC;
+}
+
+button {
+    background: #007ACC;
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+    button:hover {
+        background: #005fa3;
+    }
+
+.error {
+    color: red;
+    margin-bottom: 10px;
+}
+
+.paging a {
+    margin: 0 5px;
+    text-decoration: none;
+}
+
+.paging strong {
+    margin: 0 5px;
+}
+
+.progress-container {
+    display: none;
+    height: 6px;
+    background: #ddd;
+    border-radius: 3px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    width: 0%;
+    height: 100%;
+    background: #1abc9c;
+    animation: loading 1.2s infinite;
+}
+
+@keyframes loading {
+    0% {
+        width: 0%;
+    }
+
+    50% {
+        width: 70%;
+    }
+
+    100% {
+        width: 100%;
+    }
+}
+
