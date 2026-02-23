@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using LogWebViewer.Models;
 using Newtonsoft.Json;
 
@@ -15,16 +16,23 @@ namespace LogWebViewer.Controllers
         [DllImport("LogReaderDLL.dll", CallingConvention = CallingConvention.StdCall)]
         private static extern IntPtr ReadBinaryLog(string fileName);
 
-        private const int PageSize = 1000; // logs per page
+        private const int PageSize = 50;
 
+        // =========================
+        // Index
+        // =========================
         [HttpGet]
         public IActionResult Index()
         {
             return View(new LogPageModel());
         }
 
+        // =========================
+        // Upload
+        // =========================
         [HttpPost]
-        public IActionResult Upload(IFormFile logFile)
+        [DisableRequestSizeLimit]
+        public async Task<IActionResult> Upload(IFormFile logFile)
         {
             if (logFile == null || logFile.Length == 0)
             {
@@ -32,7 +40,8 @@ namespace LogWebViewer.Controllers
                 return View("Index", new LogPageModel());
             }
 
-            if (!Path.GetExtension(logFile.FileName).Equals(".log", StringComparison.OrdinalIgnoreCase))
+            if (!Path.GetExtension(logFile.FileName)
+                .Equals(".log", StringComparison.OrdinalIgnoreCase))
             {
                 ViewBag.Error = "Only .log files are allowed.";
                 return View("Index", new LogPageModel());
@@ -40,18 +49,37 @@ namespace LogWebViewer.Controllers
 
             try
             {
-                var tempPath = Path.Combine(Path.GetTempPath(), logFile.FileName);
-                using (var stream = new FileStream(tempPath, FileMode.Create))
-                    logFile.CopyTo(stream);
+                var tempLogPath = Path.Combine(
+                    Path.GetTempPath(),
+                    Path.GetRandomFileName() + ".log"
+                );
 
-                IntPtr ptr = ReadBinaryLog(tempPath);
-                string json = Marshal.PtrToStringAnsi(ptr) ?? "[]";
-                json = EscapeInvalidJson(json);
+                await using (var fs = new FileStream(
+                    tempLogPath,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None,
+                    bufferSize: 1024 * 1024,
+                    useAsync: true))
+                {
+                    await logFile.CopyToAsync(fs);
+                }
 
-                var jsonTempFile = Path.Combine(Path.GetTempPath(), "logstream.json");
-                System.IO.File.WriteAllText(jsonTempFile, json);
+                await Task.Run(() =>
+                {
+                    IntPtr ptr = ReadBinaryLog(tempLogPath);
+                    string json = Marshal.PtrToStringAnsi(ptr) ?? "[]";
+                    json = EscapeInvalidJson(json);
 
-                return RedirectToAction("Page", new { page = 1 });
+                    var jsonPath = Path.Combine(
+                        Path.GetTempPath(),
+                        "logstream.json"
+                    );
+
+                    System.IO.File.WriteAllText(jsonPath, json);
+                });
+
+                return RedirectToAction(nameof(Page), new { page = 1 });
             }
             catch (Exception ex)
             {
@@ -60,11 +88,22 @@ namespace LogWebViewer.Controllers
             }
         }
 
+        // =========================
+        // Paging + Filtering
+        // =========================
         [HttpGet]
-        public IActionResult Page(int page = 1, string level = "", string source = "", string function = "")
+        public IActionResult Page(
+            int page = 1,
+            string level = "",
+            string source = "",
+            string function = "")
         {
-            var jsonTempFile = Path.Combine(Path.GetTempPath(), "logstream.json");
-            if (!System.IO.File.Exists(jsonTempFile))
+            var jsonPath = Path.Combine(
+                Path.GetTempPath(),
+                "logstream.json"
+            );
+
+            if (!System.IO.File.Exists(jsonPath))
             {
                 ViewBag.Error = "No uploaded log file found. Please upload first.";
                 return View("Index", new LogPageModel());
@@ -73,47 +112,50 @@ namespace LogWebViewer.Controllers
             var logs = new List<LogEntry>();
             int totalLogs = 0;
 
-            using (var sr = new StreamReader(jsonTempFile))
-            using (var reader = new JsonTextReader(sr))
+            using var sr = new StreamReader(jsonPath);
+            using var reader = new JsonTextReader(sr);
+            var serializer = new JsonSerializer();
+
+            if (reader.Read() && reader.TokenType == JsonToken.StartArray)
             {
-                var serializer = new JsonSerializer();
-                if (reader.Read() && reader.TokenType == JsonToken.StartArray)
+                int skip = (page - 1) * PageSize;
+                int index = 0;
+
+                while (reader.Read())
                 {
-                    int skip = (page - 1) * PageSize;
-                    int index = 0;
-
-                    while (reader.Read())
+                    if (reader.TokenType == JsonToken.StartObject)
                     {
-                        if (reader.TokenType == JsonToken.StartObject)
-                        {
-                            var log = serializer.Deserialize<LogEntry>(reader);
+                        var log = serializer.Deserialize<LogEntry>(reader);
 
-                            if (!string.IsNullOrEmpty(level) && !string.Equals(log.Level, level, StringComparison.OrdinalIgnoreCase))
-                                continue;
-                            if (!string.IsNullOrEmpty(source) && !log.Source.Contains(source, StringComparison.OrdinalIgnoreCase))
-                                continue;
-                            if (!string.IsNullOrEmpty(function) && !log.Function.Contains(function, StringComparison.OrdinalIgnoreCase))
-                                continue;
+                        if (!string.IsNullOrEmpty(level) &&
+                            !string.Equals(log.Level, level, StringComparison.OrdinalIgnoreCase))
+                            continue;
 
-                            totalLogs++;
-                            if (index >= skip && logs.Count < PageSize)
-                                logs.Add(log);
+                        if (!string.IsNullOrEmpty(source) &&
+                            !log.Source.Contains(source, StringComparison.OrdinalIgnoreCase))
+                            continue;
 
-                            index++;
-                        }
-                        else if (reader.TokenType == JsonToken.EndArray)
-                            break;
+                        if (!string.IsNullOrEmpty(function) &&
+                            !log.Function.Contains(function, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        totalLogs++;
+
+                        if (index >= skip && logs.Count < PageSize)
+                            logs.Add(log);
+
+                        index++;
                     }
+                    else if (reader.TokenType == JsonToken.EndArray)
+                        break;
                 }
             }
-
-            int totalPages = (int)Math.Ceiling(totalLogs / (double)PageSize);
 
             var model = new LogPageModel
             {
                 Logs = logs,
                 CurrentPage = page,
-                TotalPages = totalPages,
+                TotalPages = (int)Math.Ceiling(totalLogs / (double)PageSize),
                 FilterLevel = level,
                 FilterSource = source,
                 FilterFunction = function
@@ -122,6 +164,9 @@ namespace LogWebViewer.Controllers
             return View("Index", model);
         }
 
+        // =========================
+        // JSON cleanup
+        // =========================
         private string EscapeInvalidJson(string input)
         {
             return string.Concat(input.Select(c =>
@@ -130,15 +175,5 @@ namespace LogWebViewer.Controllers
                     : c.ToString()
             ));
         }
-    }
-
-    public class LogPageModel
-    {
-        public List<LogEntry> Logs { get; set; } = new List<LogEntry>();
-        public int CurrentPage { get; set; } = 1;
-        public int TotalPages { get; set; } = 0;
-        public string FilterLevel { get; set; } = "";
-        public string FilterSource { get; set; } = "";
-        public string FilterFunction { get; set; } = "";
     }
 }

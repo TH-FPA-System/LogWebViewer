@@ -1,4 +1,5 @@
 ﻿@model LogWebViewer.Models.LogPageModel
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,40 +7,66 @@
     <title>Log Viewer</title>
 
     <style>
-        :root {
-            --primary: #007ACC;
-            --primary-dark: #005fa3;
-            --bg: #f5f7fa;
-        }
-
         body {
-            font-family: Arial, sans-serif;
+            font-family: Arial;
             margin: 20px;
-            background: var(--bg);
+            background: #f5f7fa;
         }
 
         h1 {
             color: #34495E;
         }
 
-        .card {
-            background: #fff;
+        .box {
             padding: 12px;
+            background: #fff;
+            border: 1px solid #ccc;
             border-radius: 6px;
-            border: 1px solid #ddd;
             margin-bottom: 15px;
-        }
-
-        .flex {
             display: flex;
             gap: 10px;
             align-items: center;
             flex-wrap: wrap;
         }
 
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            background: white;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        th {
+            background-color: #007ACC;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .level-ERROR {
+            background-color: #fdd;
+            color: #900;
+        }
+
+        .level-WARN {
+            background-color: #ffe;
+            color: #aa0;
+        }
+
+        .level-INFO {
+            background-color: #eef;
+            color: #007ACC;
+        }
+
         button {
-            background: var(--primary);
-            color: #fff;
+            background: #007ACC;
+            color: white;
             border: none;
             padding: 6px 14px;
             border-radius: 4px;
@@ -47,74 +74,21 @@
         }
 
             button:hover {
-                background: var(--primary-dark);
+                background: #005fa3;
             }
-
-            button:disabled {
-                opacity: .6;
-                cursor: not-allowed;
-            }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #fff;
-        }
-
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            white-space: nowrap;
-        }
-
-        th {
-            background: var(--primary);
-            color: #fff;
-            position: sticky;
-            top: 0;
-        }
-
-        tr:nth-child(even) {
-            background: #f9f9f9;
-        }
-
-        .level-ERROR {
-            background: #fdd;
-            color: #900;
-        }
-
-        .level-WARN {
-            background: #ffe;
-            color: #aa0;
-        }
-
-        .level-INFO {
-            background: #eef;
-            color: #007ACC;
-        }
 
         .error {
             color: red;
             margin-bottom: 10px;
         }
 
-        .loading {
-            display: none;
-            color: #555;
-        }
-
         .paging a {
-            margin: 0 4px;
+            margin: 0 5px;
             text-decoration: none;
         }
 
         .paging strong {
-            margin: 0 4px;
-        }
-
-        progress {
-            width: 200px;
-            height: 16px;
+            margin: 0 5px;
         }
     </style>
 </head>
@@ -122,21 +96,20 @@
 <body>
     <h1>📄 Log Viewer</h1>
 
-    <!-- Upload -->
-    <div class="card flex">
-        <input type="file" id="fileInput" accept=".log">
-        <button id="btnUpload" disabled>Upload</button>
-        <progress id="progress" value="0" max="100" hidden></progress>
-        <span class="loading" id="uploadStatus">Uploading…</span>
-    </div>
+    <form asp-action="Upload"
+          method="post"
+          enctype="multipart/form-data"
+          class="box">
+        <input type="file" name="logFile" accept=".log" />
+        <button type="submit">Upload</button>
+    </form>
 
     @if (ViewBag.Error != null)
     {
         <div class="error">@ViewBag.Error</div>
     }
 
-    <!-- Filters -->
-    <form method="get" asp-action="Page" class="card flex">
+    <form method="get" asp-action="Page" class="box">
         <input type="hidden" name="page" value="1" />
 
         <label>
@@ -155,10 +128,9 @@
         <button type="submit">Filter</button>
     </form>
 
-    <!-- Table -->
     @if (!Model.Logs.Any())
     {
-        <div class="card">No logs found.</div>
+        <div class="box">No logs to display.</div>
     }
     else
     {
@@ -187,10 +159,9 @@
         </table>
     }
 
-    <!-- Paging -->
     @if (Model.TotalPages > 1)
     {
-        <div class="paging card">
+        <div class="paging box">
             @for (int i = 1; i <= Model.TotalPages; i++)
             {
                 if (i == Model.CurrentPage)
@@ -208,38 +179,6 @@
             }
         </div>
     }
-
-    <script>
-        const fileInput = document.getElementById('fileInput');
-        const btn = document.getElementById('btnUpload');
-        const progress = document.getElementById('progress');
-        const status = document.getElementById('uploadStatus');
-
-        fileInput.addEventListener('change', () => {
-            btn.disabled = !fileInput.files.length;
-        });
-
-        btn.addEventListener('click', async () => {
-            const formData = new FormData();
-            formData.append("logFile", fileInput.files[0]);
-
-            progress.hidden = false;
-            status.style.display = 'inline';
-            btn.disabled = true;
-
-            const xhr = new XMLHttpRequest();
-            xhr.open("POST", "/Log/Upload");
-
-            xhr.upload.onprogress = e => {
-                if (e.lengthComputable) {
-                    progress.value = (e.loaded / e.total) * 100;
-                }
-            };
-
-            xhr.onload = () => location.reload();
-            xhr.send(formData);
-        });
-    </script>
 
 </body>
 </html>
