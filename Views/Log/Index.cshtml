@@ -14,52 +14,156 @@
             --primary-dark: #005fa3;
             --bg: #f5f7fa;
         }
-        body { font-family: Arial, sans-serif; margin:20px; background: var(--bg); }
-        h1 { color:#34495E; }
-        .card { background:#fff; padding:12px; border-radius:6px; border:1px solid #ddd; margin-bottom:15px; }
-        .flex { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-        button { background:var(--primary); color:#fff; border:none; padding:6px 14px; border-radius:4px; cursor:pointer; }
-        button:hover { background: var(--primary-dark); }
-        button:disabled { opacity:.6; cursor:not-allowed; }
-        table { width:100%; border-collapse:collapse; background:#fff; }
-        th, td { border:1px solid #ddd; padding:8px; white-space:nowrap; }
-        th { background: var(--primary); color:#fff; position: sticky; top:0; }
-        tr:nth-child(even) { background:#f9f9f9; }
-        .level-ERROR { background:#fdd; color:#900; }
-        .level-WARN { background:#ffe; color:#aa0; }
-        .level-INFO { background:#eef; color:#007ACC; }
-        .loading { display:none; color:#555; font-weight:bold; }
-        .paging a { margin:0 4px; text-decoration:none; cursor:pointer; }
-        .paging strong { margin:0 4px; }
-        progress { width:200px; height:16px; }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: var(--bg);
+        }
+
+        h1 {
+            color: #34495E;
+        }
+
+        .card {
+            background: #fff;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            margin-bottom: 15px;
+        }
+
+        .flex {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+            button:hover {
+                background: var(--primary-dark);
+            }
+
+            button:disabled {
+                opacity: .6;
+                cursor: not-allowed;
+            }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            white-space: nowrap;
+        }
+
+        th {
+            background: var(--primary);
+            color: #fff;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        /* Log level colors */
+        .level-ERROR {
+            background: #fdd;
+            color: #900;
+        }
+
+        .level-WARNING {
+            background: #ffe;
+            color: #aa0;
+        }
+
+        .level-INFO {
+            background: #eef;
+            color: #007ACC;
+        }
+
+        .level-DEBUG {
+            background: #f0f0f0;
+            color: #555;
+        }
+
+        .loading {
+            display: none;
+            color: #555;
+            font-weight: bold;
+        }
+
+        .paging a {
+            margin: 0 4px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .paging strong {
+            margin: 0 4px;
+        }
+
+        progress {
+            width: 200px;
+            height: 16px;
+        }
+
+        /* Fix column widths */
+        table th:first-child,
+        table td:first-child {
+            width: 100px; /* Time column */
+            text-align: center;
+        }
+
+        table th:nth-child(2),
+        table td:nth-child(2) {
+            width: 75px; /* Level column */
+            text-align: center; /* Optional: center the level text */
+        }
     </style>
 </head>
 <body>
-<h1>📄 Log Viewer</h1>
+    <h1>📄 Log Viewer</h1>
 
-@if(ViewBag.LogNotFound==true)
-{
-    <script>alert("Log file not found for the specified area and date!");</script>
-}
+    @if (ViewBag.LogNotFound == true)
+    {
+        <script>alert("Log file not found for the specified area and date!");</script>
+    }
 
-<div id="pageLoading" class="loading">Loading log file…</div>
+    <div id="pageLoading" class="loading">Loading log file…</div>
 
-<!-- Upload -->
-<div class="card flex">
-    <input type="file" id="fileInput" accept=".log" />
-    <button id="btnUpload" disabled>Upload</button>
-    <progress id="progress" value="0" max="100" hidden></progress>
-    <span class="loading" id="uploadStatus">Uploading…</span>
-</div>
-<div id="uploadMessage"></div>
+    <!-- Upload -->
+    <div class="card flex">
+        <input type="file" id="fileInput" accept=".log" />
+        <button id="btnUpload" disabled>Upload</button>
+        <progress id="progress" value="0" max="100" hidden></progress>
+        <span class="loading" id="uploadStatus">Uploading…</span>
+    </div>
+    <div id="uploadMessage"></div>
 
-<!-- Filters -->
-<form id="filterForm" method="get" class="card flex">
-    <input type="hidden" name="page" value="1" />
-    <input type="hidden" name="area" value="@areaQuery" />
-    <input type="hidden" name="date" value="@dateQuery" />
+    <!-- Filters -->
+    <form id="filterForm" method="get" class="card flex">
+        <input type="hidden" name="page" value="1" />
+        <input type="hidden" name="area" value="@areaQuery" />
+        <input type="hidden" name="date" value="@dateQuery" />
 
-    <label>Level:
+        <label>
+            Level:
             <select name="level">
                 <option value="" selected="@(string.IsNullOrEmpty(Model.FilterLevel) ? "selected" : null)">All</option>
                 <option value="Error" selected="@(Model.FilterLevel == "Error" ? "selected" : null)">Error</option>
@@ -67,106 +171,106 @@
                 <option value="Info" selected="@(Model.FilterLevel == "Info" ? "selected" : null)">Info</option>
                 <option value="Debug" selected="@(Model.FilterLevel == "Debug" ? "selected" : null)">Debug</option>
             </select>
-    </label>
+        </label>
 
-    <label>From: <input type="time" name="fromTime" value="@(Model.FromTime?.ToString("HH:mm") ?? "")" /></label>
-    <label>To: <input type="time" name="toTime" value="@(Model.ToTime?.ToString("HH:mm") ?? "")" /></label>
-    <label>Description: <input type="text" name="description" value="@(Model.FilterDescription ?? "")" placeholder="Search description…" /></label>
+        <label>From: <input type="time" name="fromTime" value="@(Model.FromTime?.ToString("HH:mm") ?? "")" /></label>
+        <label>To: <input type="time" name="toTime" value="@(Model.ToTime?.ToString("HH:mm") ?? "")" /></label>
+        <label>Description: <input type="text" name="description" value="@(Model.FilterDescription ?? "")" placeholder="Search description…" /></label>
 
-    <button type="submit">Filter</button>
-    <button type="button" id="btnExport">Export TXT</button>
-</form>
+        <button type="submit">Filter</button>
+        <button type="button" id="btnExport">Export TXT</button>
+    </form>
 
-<!-- Table -->
-<div id="logTableContainer">
-    @await Html.PartialAsync("_LogTablePartial", Model)
-</div>
+    <!-- Table -->
+    <div id="logTableContainer">
+        @await Html.PartialAsync("_LogTablePartial", Model)
+    </div>
 
-<script>
-const fileInput = document.getElementById('fileInput');
-const btnUpload = document.getElementById('btnUpload');
-const progress = document.getElementById('progress');
-const uploadStatus = document.getElementById('uploadStatus');
-const uploadMessage = document.getElementById('uploadMessage');
-const tableContainer = document.getElementById('logTableContainer');
-const filterForm = document.getElementById('filterForm');
-const pageLoading = document.getElementById('pageLoading');
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const btnUpload = document.getElementById('btnUpload');
+        const progress = document.getElementById('progress');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const uploadMessage = document.getElementById('uploadMessage');
+        const tableContainer = document.getElementById('logTableContainer');
+        const filterForm = document.getElementById('filterForm');
+        const pageLoading = document.getElementById('pageLoading');
 
-// URL auto-load indicator
-document.addEventListener('DOMContentLoaded', () => {
-    const p = new URLSearchParams(window.location.search);
-    if(p.get('area') && p.get('date')) {
-        pageLoading.style.display='inline';
-        setTimeout(()=>pageLoading.style.display='none',600);
-    }
-});
+        // URL auto-load indicator
+        document.addEventListener('DOMContentLoaded', () => {
+            const p = new URLSearchParams(window.location.search);
+            if(p.get('area') && p.get('date')) {
+                pageLoading.style.display='inline';
+                setTimeout(()=>pageLoading.style.display='none',600);
+            }
+        });
 
-// Enable upload button
-fileInput.addEventListener('change', ()=>{ btnUpload.disabled = !fileInput.files.length; });
+        // Enable upload button
+        fileInput.addEventListener('change', ()=>{ btnUpload.disabled = !fileInput.files.length; });
 
-// Upload file
-btnUpload.addEventListener('click', ()=>{
-    const file = fileInput.files[0];
-    if(!file) return;
-    const formData = new FormData();
-    formData.append("logFile", file);
+        // Upload file
+        btnUpload.addEventListener('click', ()=> {
+            const file = fileInput.files[0];
+            if(!file) return;
+            const formData = new FormData();
+            formData.append("logFile", file);
 
-    progress.hidden = false; progress.value = 0;
-    uploadStatus.style.display = 'inline';
-    uploadMessage.textContent = ''; btnUpload.disabled = true;
+            progress.hidden = false; progress.value = 0;
+            uploadStatus.style.display = 'inline';
+            uploadMessage.textContent = ''; btnUpload.disabled = true;
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST","/Log/Upload");
-    xhr.upload.onprogress = e => { if(e.lengthComputable) progress.value = (e.loaded/e.total)*100; };
-    xhr.onload = () => {
-        btnUpload.disabled = false;
-        progress.hidden = true;
-        uploadStatus.style.display = 'none';
-        uploadMessage.textContent = xhr.status==200?"Upload successful!":"Upload failed!";
-        if(xhr.status==200) fetchLogs(1);
-    };
-    xhr.onerror = () => {
-        btnUpload.disabled = false;
-        progress.hidden = true;
-        uploadStatus.style.display = 'none';
-        uploadMessage.textContent="Upload failed (network)";
-    };
-    xhr.send(formData);
-});
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST","/Log/Upload");
+            xhr.upload.onprogress = e => { if(e.lengthComputable) progress.value = (e.loaded/e.total)*100; };
+            xhr.onload = () => {
+                btnUpload.disabled = false;
+                progress.hidden = true;
+                uploadStatus.style.display = 'none';
+                uploadMessage.textContent = xhr.status==200?"Upload successful!":"Upload failed!";
+                if(xhr.status==200) fetchLogs(1);
+            };
+            xhr.onerror = () => {
+                btnUpload.disabled = false;
+                progress.hidden = true;
+                uploadStatus.style.display = 'none';
+                uploadMessage.textContent="Upload failed (network)";
+            };
+            xhr.send(formData);
+        });
 
-// Filters
-filterForm.addEventListener('submit', e => { e.preventDefault(); fetchLogs(1); });
+        // Filters
+        filterForm.addEventListener('submit', e => { e.preventDefault(); fetchLogs(1); });
 
-// Paging
-tableContainer.addEventListener('click', e => {
-    if(e.target.tagName==='A' && e.target.dataset.page){
-        e.preventDefault(); fetchLogs(e.target.dataset.page);
-    }
-});
+        // Paging
+        tableContainer.addEventListener('click', e => {
+            if(e.target.tagName==='A' && e.target.dataset.page){
+                e.preventDefault(); fetchLogs(e.target.dataset.page);
+            }
+        });
 
-// Fetch logs via AJAX
-function fetchLogs(page){
-    pageLoading.style.display = 'inline';
-    const params = new URLSearchParams(new FormData(filterForm));
-    params.set('page', page);
-    fetch('/Log/Page?' + params.toString(), { headers:{'X-Requested-With':'XMLHttpRequest'} })
-        .then(r=>r.text())
-        .then(html => { tableContainer.innerHTML = html; pageLoading.style.display = 'none'; })
-        .catch(()=> pageLoading.style.display='none');
-}
+        // Fetch logs via AJAX
+        function fetchLogs(page){
+            pageLoading.style.display = 'inline';
+            const params = new URLSearchParams(new FormData(filterForm));
+            params.set('page', page);
+            fetch('/Log/Page?' + params.toString(), { headers:{'X-Requested-With':'XMLHttpRequest'} })
+                .then(r=>r.text())
+                .then(html => { tableContainer.innerHTML = html; pageLoading.style.display = 'none'; })
+                .catch(()=> pageLoading.style.display='none');
+        }
 
-// Export TXT
-document.getElementById('btnExport').addEventListener('click', () => {
-    const area = document.querySelector('input[name="area"]').value;
-    const date = document.querySelector('input[name="date"]').value;
+        // Export TXT
+        document.getElementById('btnExport').addEventListener('click', () => {
+            const area = document.querySelector('input[name="area"]').value;
+            const date = document.querySelector('input[name="date"]').value;
 
-    if(!area || !date){
-        alert("Area or Date missing!");
-        return;
-    }
+            if(!area || !date){
+                alert("Area or Date missing!");
+                return;
+            }
 
-    window.location = `/Log/ExportTxt?area=${encodeURIComponent(area)}&date=${encodeURIComponent(date)}`;
-});
-</script>
+            window.location = `/Log/ExportTxt?area=${encodeURIComponent(area)}&date=${encodeURIComponent(date)}`;
+        });
+    </script>
 </body>
 </html>

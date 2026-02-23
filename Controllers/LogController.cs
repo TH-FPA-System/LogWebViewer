@@ -134,15 +134,23 @@ namespace LogWebViewer.Controllers
 
             try
             {
-                byte[] fileBytes = System.IO.File.ReadAllBytes(logFilePath);
-                return File(fileBytes, "text/plain", fileName);
+                // Call DLL to read binary log
+                IntPtr ptr = ReadBinaryLog(logFilePath);
+                string json = Marshal.PtrToStringAnsi(ptr) ?? "[]";
+
+                // Optionally, parse JSON to create readable text
+                var logs = JsonConvert.DeserializeObject<List<LogEntry>>(json) ?? new List<LogEntry>();
+                var txtLines = logs.Select(l => $"{l.Time}\t{l.Level}\t{l.Description}");
+                var finalText = string.Join(Environment.NewLine, txtLines);
+
+                var bytes = System.Text.Encoding.UTF8.GetBytes(finalText);
+                return File(bytes, "text/plain", fileName);
             }
             catch (Exception ex)
             {
                 return StatusCode(500, $"Export failed: {ex.Message}");
             }
         }
-
         // --------------------------
         // Helper: paginate logs
         // --------------------------

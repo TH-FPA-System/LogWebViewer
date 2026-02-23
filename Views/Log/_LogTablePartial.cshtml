@@ -17,9 +17,11 @@ else
         <tbody>
             @foreach (var log in Model.Logs)
             {
-                <tr class="level-@log.Level">
-                    <td>@log.Time</td>
-                    <td>@log.Level</td>
+                <tr>
+                    <!-- Time column: show '-' if empty/null, otherwise trimmed -->
+                    <td>@(string.IsNullOrWhiteSpace(log.Time) ? "-" : log.Time.Trim())</td>
+                    <!-- Level column colored -->
+                    <td class="level-@log.Level.ToUpper()">@log.Level</td>
                     <td>@log.Description</td>
                 </tr>
             }
@@ -33,10 +35,12 @@ else
                 int current = Model.CurrentPage;
                 int total = Model.TotalPages;
             }
+
             @if (current > 1)
             {
                 <a href="#" data-page="@(current - 1)">Prev</a>
             }
+
             @for (int i = 1; i <= total; i++)
             {
                 if (i == current)
@@ -45,10 +49,10 @@ else
                 }
                 else
                 {
-
                     <a href="#" data-page="@i">@i</a>
                 }
             }
+
             @if (current < total)
             {
                 <a href="#" data-page="@(current + 1)">Next</a>
