@@ -1,0 +1,168 @@
+﻿@model List<LogWebViewer.Models.HostInfo>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Host Log Browser</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f7fa;
+        }
+
+        h1 {
+            color: #34495E;
+        }
+
+        .card {
+            background: #fff;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            margin-bottom: 12px;
+        }
+
+        .flex {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            white-space: nowrap;
+        }
+
+        th {
+            background: #007ACC;
+            color: #fff;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        a {
+            color: #007ACC;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+            a:hover {
+                text-decoration: underline;
+            }
+    </style>
+</head>
+
+<body>
+    <h1>🖥 Host Log Browser</h1>
+
+    <!-- Filters -->
+    <div class="card flex">
+        <label>
+            Date:
+            <input type="date"
+                   id="logDate"
+                   value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+        </label>
+
+        <label>
+            Group:
+            <select id="groupFilter">
+                <option value="">All</option>
+                @foreach (var group in Model.Select(x => x.Group).Distinct())
+                {
+                    <option value="@group">@group</option>
+                }
+            </select>
+        </label>
+    </div>
+
+    <!-- Host Table -->
+    <table>
+        <thead>
+            <tr>
+                <th>Host</th>
+                <th>IP Address</th>
+                <th>Group</th>
+            </tr>
+        </thead>
+        <tbody id="hostTableBody">
+            @foreach (var h in Model)
+            {
+                <tr data-host="@h.Host" data-group="@h.Group">
+                    <td class="host-cell">@h.Host</td>
+                    <td>@h.IpAddress</td>
+                    <td>@h.Group</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <script>
+        const GROUP_KEY = "logviewer_last_group";
+
+        function formatDate(dateStr) {
+            const months = ["Jan","Feb","Mar","Apr","May","Jun",
+                            "Jul","Aug","Sep","Oct","Nov","Dec"];
+            const d = new Date(dateStr);
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = months[d.getMonth()];
+            const year = d.getFullYear().toString().slice(-2);
+            return `${day}${month}${year}`;
+        }
+
+        function restoreGroup() {
+            const saved = localStorage.getItem(GROUP_KEY);
+            if (!saved) return;
+
+            const select = document.getElementById("groupFilter");
+            if ([...select.options].some(o => o.value === saved)) {
+                select.value = saved;
+            }
+        }
+
+        function updateTable() {
+            const date = document.getElementById("logDate").value;
+            const group = document.getElementById("groupFilter").value;
+            const rows = document.querySelectorAll("#hostTableBody tr");
+
+            localStorage.setItem(GROUP_KEY, group);
+
+            rows.forEach(row => {
+                const host = row.dataset.host;
+                const rowGroup = row.dataset.group;
+
+                if (group && rowGroup !== group) {
+                    row.style.display = "none";
+                    return;
+                }
+
+                row.style.display = "";
+
+                const cell = row.querySelector(".host-cell");
+                const url = `/Log/Index?area=${host}&Date=${formatDate(date)}`;
+                cell.innerHTML = `<a href="${url}" target="_blank">${host}</a>`;
+            });
+        }
+
+        // Init
+        restoreGroup();
+        updateTable();
+
+        document.getElementById("logDate").addEventListener("change", updateTable);
+        document.getElementById("groupFilter").addEventListener("change", updateTable);
+    </script>
+</body>
+</html>
