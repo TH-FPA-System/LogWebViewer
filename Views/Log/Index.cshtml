@@ -32,7 +32,19 @@
     </style>
 </head>
 <body>
+
     <h1>📄 Log Viewer</h1>
+
+    <!-- Alert if log file not found -->
+    @if (ViewBag.LogNotFound == true)
+    {
+        <script>
+            alert("Log file not found for the specified area and date!");
+        </script>
+    }
+
+    <!-- Page Loading Indicator -->
+    <div id="pageLoading" class="loading">Loading log file…</div>
 
     <!-- Upload -->
     <div class="card flex">
@@ -48,33 +60,19 @@
     <form id="filterForm" method="get" class="card flex">
         <input type="hidden" name="page" value="1" />
 
-        <!-- Level -->
         <label>Level:
             <select name="level">
                 <option value="" @@(string.IsNullOrEmpty(Model.FilterLevel) ? "selected" : "")>All</option>
-                <option value="Error" @@(Model.FilterLevel == "Error" ? "selected" : "")>Error</option>
-                <option value="Warning" @@(Model.FilterLevel == "Warning" ? "selected" : "")>Warning</option>
-                <option value="Info" @@(Model.FilterLevel == "Info" ? "selected" : "")>Info</option>
-                <option value="Debug" @@(Model.FilterLevel == "Debug" ? "selected" : "")>Debug</option>
+                <option value="Error" @@(Model.FilterLevel=="Error"?"selected":"")>Error</option>
+                <option value="Warning" @@(Model.FilterLevel=="Warning"?"selected":"")>Warning</option>
+                <option value="Info" @@(Model.FilterLevel=="Info"?"selected":"")>Info</option>
+                <option value="Debug" @@(Model.FilterLevel=="Debug"?"selected":"")>Debug</option>
             </select>
         </label>
 
-        <!-- Time From -->
-        <label>
-            From:
-            <input type="time" name="fromTime" value="@(Model.FromTime?.ToString("HH:mm") ?? "")" />
-        </label>
-
-        <!-- Time To -->
-        <label>
-            To:
-            <input type="time" name="toTime" value="@(Model.ToTime?.ToString("HH:mm") ?? "")" />
-        </label>
-
-        <!-- Description -->
-        <label>Description:
-            <input type="text" name="description" value="@(Model.FilterDescription ?? " ")" placeholder="Search description…" />
-        </label>
+        <label>From: <input type="time" name="fromTime" value="@(Model.FromTime?.ToString("HH:mm") ?? "")" /></label>
+        <label>To: <input type="time" name="toTime" value="@(Model.ToTime?.ToString("HH:mm") ?? "")" /></label>
+        <label>Description: <input type="text" name="description" value="@(Model.FilterDescription ?? "")" placeholder="Search description…" /></label>
 
         <button type="submit">Filter</button>
     </form>
@@ -85,7 +83,6 @@
     </div>
 
     <script>
-        // Upload elements
         const fileInput = document.getElementById('fileInput');
         const btn = document.getElementById('btnUpload');
         const progress = document.getElementById('progress');
@@ -93,11 +90,23 @@
         const uploadMessage = document.getElementById('uploadMessage');
         const tableContainer = document.getElementById('logTableContainer');
         const filterForm = document.getElementById('filterForm');
+        const pageLoading = document.getElementById('pageLoading');
 
-        // Enable upload button when file selected
+        // --- Page loading for URL auto-load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const area = urlParams.get('area');
+            const date = urlParams.get('date');
+            if (area && date) {
+                pageLoading.style.display = 'inline';
+                // Hide after short timeout (server already preloaded logs)
+                setTimeout(() => pageLoading.style.display = 'none', 500);
+            }
+        });
+
+        // --- Upload ---
         fileInput.addEventListener('change', () => btn.disabled = !fileInput.files.length);
 
-        // Upload file via AJAX
         btn.addEventListener('click', () => {
             const file = fileInput.files[0];
             if (!file) return;
@@ -113,7 +122,7 @@
             xhr.open("POST", "/Log/Upload");
 
             xhr.upload.onprogress = e => {
-                if(e.lengthComputable) progress.value = (e.loaded / e.total) * 100;
+                if (e.lengthComputable) progress.value = (e.loaded / e.total) * 100;
             };
 
             xhr.onload = () => {
@@ -121,7 +130,7 @@
                 progress.hidden = true;
                 status.style.display = 'none';
 
-                if(xhr.status === 200){
+                if (xhr.status === 200) {
                     uploadMessage.textContent = "Upload successful!";
                     fetchLogs(1);
                 } else {
@@ -132,22 +141,22 @@
             };
 
             xhr.onerror = () => {
-                btn.disabled=false;
-                progress.hidden=true;
-                status.style.display='none';
-                uploadMessage.textContent="Upload failed (network)";
+                btn.disabled = false;
+                progress.hidden = true;
+                status.style.display = 'none';
+                uploadMessage.textContent = "Upload failed (network)";
             };
 
             xhr.send(formData);
         });
 
-        // Filter form AJAX
+        // --- Filters ---
         filterForm.addEventListener('submit', e => {
             e.preventDefault();
             fetchLogs(1);
         });
 
-        // Paging click AJAX
+        // --- Paging ---
         tableContainer.addEventListener('click', e => {
             if (e.target.tagName === 'A' && e.target.dataset.page) {
                 e.preventDefault();
@@ -155,14 +164,22 @@
             }
         });
 
+        // --- Fetch logs (AJAX) ---
         function fetchLogs(page) {
+            pageLoading.style.display = 'inline';
             const params = new URLSearchParams(new FormData(filterForm));
             params.set('page', page);
 
             fetch('/Log/Page?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                 .then(r => r.text())
-                .then(html => tableContainer.innerHTML = html)
-                .catch(err => console.warn('Fetch error:', err));
+                .then(html => {
+                    tableContainer.innerHTML = html;
+                    pageLoading.style.display = 'none';
+                })
+                .catch(err => {
+                    console.warn('Fetch error:', err);
+                    pageLoading.style.display = 'none';
+                });
         }
     </script>
 </body>

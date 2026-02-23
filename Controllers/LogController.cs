@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using LogWebViewer.Models;
 using Newtonsoft.Json;
 
@@ -19,11 +20,41 @@ namespace LogWebViewer.Controllers
         private string JsonPath => Path.Combine(Path.GetTempPath(), "logstream.json");
 
         [HttpGet]
-        public IActionResult Index()
+        public IActionResult Index(string area = null, string date = null)
         {
-            return View(new LogPageModel());
-        }
+            var model = new LogPageModel();
+            ViewBag.LogNotFound = false; // default
 
+            if (!string.IsNullOrEmpty(area) && !string.IsNullOrEmpty(date))
+            {
+                area = area.Trim('\'', '"');
+                var logFilePath = Path.Combine(@"E:\shr\lislog", area, $"{date}.log");
+
+                if (System.IO.File.Exists(logFilePath))
+                {
+                    try
+                    {
+                        IntPtr ptr = ReadBinaryLog(logFilePath);
+                        string json = Marshal.PtrToStringAnsi(ptr) ?? "[]";
+                        System.IO.File.WriteAllText(JsonPath, json);
+
+                        // Load first page automatically
+                        model = GetLogsPage(1, "", "", null, null);
+                    }
+                    catch
+                    {
+                        // On error, consider as not found
+                        ViewBag.LogNotFound = true;
+                    }
+                }
+                else
+                {
+                    ViewBag.LogNotFound = true;
+                }
+            }
+
+            return View(model);
+        }
         [HttpPost]
         [DisableRequestSizeLimit]
         public async Task<IActionResult> Upload(IFormFile logFile)
@@ -42,8 +73,6 @@ namespace LogWebViewer.Controllers
 
                 IntPtr ptr = ReadBinaryLog(tempLogPath);
                 string json = Marshal.PtrToStringAnsi(ptr) ?? "[]";
-
-                // Save raw JSON (no sanitization needed)
                 System.IO.File.WriteAllText(JsonPath, json);
 
                 return Ok(new { success = true });
@@ -62,11 +91,24 @@ namespace LogWebViewer.Controllers
             TimeSpan? fromTime = null,
             TimeSpan? toTime = null)
         {
-            if (!System.IO.File.Exists(JsonPath))
-                return View("Index", new LogPageModel { Logs = new List<LogEntry>() });
+            var model = GetLogsPage(page, level, description, fromTime, toTime);
 
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                return PartialView("_LogTablePartial", model);
+
+            return View("Index", model);
+        }
+
+        // --------------------------
+        // Helper: Load logs page
+        // --------------------------
+        private LogPageModel GetLogsPage(int page, string level, string description, TimeSpan? fromTime, TimeSpan? toTime)
+        {
             var logs = new List<LogEntry>();
             int totalLogs = 0;
+
+            if (!System.IO.File.Exists(JsonPath))
+                return new LogPageModel { Logs = logs };
 
             try
             {
@@ -84,56 +126,32 @@ namespace LogWebViewer.Controllers
                         if (reader.TokenType != JsonToken.StartObject) continue;
 
                         LogEntry log = null;
-                        try
-                        {
-                            log = serializer.Deserialize<LogEntry>(reader);
-                        }
-                        catch
-                        {
-                            // Skip corrupted entry
-                            continue;
-                        }
-
+                        try { log = serializer.Deserialize<LogEntry>(reader); } catch { continue; }
                         if (log == null) continue;
 
-                        // Level filter
-                        if (!string.IsNullOrEmpty(level) &&
-                            !string.Equals(log.Level, level, StringComparison.OrdinalIgnoreCase))
-                            continue;
+                        if (!string.IsNullOrEmpty(level) && !string.Equals(log.Level, level, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (!string.IsNullOrEmpty(description) && !log.Description.Contains(description, StringComparison.OrdinalIgnoreCase)) continue;
 
-                        // Description filter
-                        if (!string.IsNullOrEmpty(description) &&
-                            !log.Description.Contains(description, StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        // Time-of-day filter
                         if (DateTime.TryParse(log.Time, out var logDateTime))
                         {
                             var logTime = logDateTime.TimeOfDay;
-
-                            if (fromTime.HasValue && logTime < fromTime.Value)
-                                continue;
-
-                            if (toTime.HasValue && logTime > toTime.Value)
-                                continue;
+                            if (fromTime.HasValue && logTime < fromTime.Value) continue;
+                            if (toTime.HasValue && logTime > toTime.Value) continue;
                         }
 
                         totalLogs++;
-                        if (index >= skip && logs.Count < PageSize)
-                            logs.Add(log);
-
+                        if (index >= skip && logs.Count < PageSize) logs.Add(log);
                         index++;
                     }
                 }
             }
             catch
             {
-                // If the file is completely corrupted, return empty list
                 logs = new List<LogEntry>();
                 totalLogs = 0;
             }
 
-            var model = new LogPageModel
+            return new LogPageModel
             {
                 Logs = logs,
                 CurrentPage = page,
@@ -143,11 +161,6 @@ namespace LogWebViewer.Controllers
                 FromTime = fromTime.HasValue ? DateTime.Today + fromTime.Value : (DateTime?)null,
                 ToTime = toTime.HasValue ? DateTime.Today + toTime.Value : (DateTime?)null
             };
-
-            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
-                return PartialView("_LogTablePartial", model);
-
-            return View("Index", model);
         }
     }
 }
