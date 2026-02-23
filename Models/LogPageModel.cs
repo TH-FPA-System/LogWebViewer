@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace LogWebViewer.Models
 {
@@ -7,9 +8,12 @@ namespace LogWebViewer.Models
         public List<LogEntry> Logs { get; set; } = new List<LogEntry>();
         public int CurrentPage { get; set; } = 1;
         public int TotalPages { get; set; } = 0;
+
+        // Filters
         public string FilterLevel { get; set; } = "";
-        public string FilterSource { get; set; } = "";
-        public string FilterFunction { get; set; } = "";
+        public DateTime? FromTime { get; set; }  // nullable, optional
+        public DateTime? ToTime { get; set; }    // nullable, optional
+        public string FilterDescription { get; set; } = "";
     }
 
     public class LogEntry

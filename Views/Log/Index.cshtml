@@ -48,18 +48,34 @@
     <form id="filterForm" method="get" class="card flex">
         <input type="hidden" name="page" value="1" />
 
-     <label>Level:
-    <select name="level">
-        <option value="" @@((string.IsNullOrEmpty(Model.FilterLevel)) ? "selected" : "")>All</option>
-        <option value="Error" @@(Model.FilterLevel == "Error" ? "selected" : "")>Error</option>
-        <option value="Warning" @@(Model.FilterLevel == "Warning" ? "selected" : "")>Warning</option>
-        <option value="Info" @@(Model.FilterLevel == "Info" ? "selected" : "")>Info</option>
-        <option value="Debug" @@(Model.FilterLevel == "Debug" ? "selected" : "")>Debug</option>
-    </select>
-</label>
+        <!-- Level -->
+        <label>Level:
+            <select name="level">
+                <option value="" @@(string.IsNullOrEmpty(Model.FilterLevel) ? "selected" : "")>All</option>
+                <option value="Error" @@(Model.FilterLevel == "Error" ? "selected" : "")>Error</option>
+                <option value="Warning" @@(Model.FilterLevel == "Warning" ? "selected" : "")>Warning</option>
+                <option value="Info" @@(Model.FilterLevel == "Info" ? "selected" : "")>Info</option>
+                <option value="Debug" @@(Model.FilterLevel == "Debug" ? "selected" : "")>Debug</option>
+            </select>
+        </label>
 
-        <input name="source" value="@Model.FilterSource" placeholder="Source contains…" />
-        <input name="function" value="@Model.FilterFunction" placeholder="Function contains…" />
+        <!-- Time From -->
+        <label>
+            From:
+            <input type="time" name="fromTime" value="@(Model.FromTime?.ToString("HH:mm") ?? "")" />
+        </label>
+
+        <!-- Time To -->
+        <label>
+            To:
+            <input type="time" name="toTime" value="@(Model.ToTime?.ToString("HH:mm") ?? "")" />
+        </label>
+
+        <!-- Description -->
+        <label>Description:
+            <input type="text" name="description" value="@(Model.FilterDescription ?? " ")" placeholder="Search description…" />
+        </label>
+
         <button type="submit">Filter</button>
     </form>
 

@@ -15,7 +15,7 @@ namespace LogWebViewer.Controllers
         [DllImport("LogReaderDLL.dll", CallingConvention = CallingConvention.StdCall)]
         private static extern IntPtr ReadBinaryLog(string fileName);
 
-        private const int PageSize = 50;
+        private const int PageSize = 150;
         private string JsonPath => Path.Combine(Path.GetTempPath(), "logstream.json");
 
         [HttpGet]
@@ -52,9 +52,13 @@ namespace LogWebViewer.Controllers
                 return StatusCode(500, new { message = $"Upload failed: {ex.Message}" });
             }
         }
-
         [HttpGet]
-        public IActionResult Page(int page = 1, string level = "", string source = "", string function = "")
+        public IActionResult Page(
+     int page = 1,
+     string level = "",
+     string description = "",
+     TimeSpan? fromTime = null,
+     TimeSpan? toTime = null)
         {
             if (!System.IO.File.Exists(JsonPath))
                 return View("Index", new LogPageModel { Logs = new List<LogEntry>() });
@@ -77,13 +81,27 @@ namespace LogWebViewer.Controllers
 
                     var log = serializer.Deserialize<LogEntry>(reader);
 
-                    // Filtering
-                    if (!string.IsNullOrEmpty(level) && !string.Equals(log.Level, level, StringComparison.OrdinalIgnoreCase))
+                    // Level filter
+                    if (!string.IsNullOrEmpty(level) &&
+                        !string.Equals(log.Level, level, StringComparison.OrdinalIgnoreCase))
                         continue;
-                    if (!string.IsNullOrEmpty(source) && !log.Source.Contains(source, StringComparison.OrdinalIgnoreCase))
+
+                    // Description filter
+                    if (!string.IsNullOrEmpty(description) &&
+                        !log.Description.Contains(description, StringComparison.OrdinalIgnoreCase))
                         continue;
-                    if (!string.IsNullOrEmpty(function) && !log.Function.Contains(function, StringComparison.OrdinalIgnoreCase))
-                        continue;
+
+                    // Time-of-day filter
+                    if (DateTime.TryParse(log.Time, out var logDateTime))
+                    {
+                        var logTime = logDateTime.TimeOfDay;
+
+                        if (fromTime.HasValue && logTime < fromTime.Value)
+                            continue;
+
+                        if (toTime.HasValue && logTime > toTime.Value)
+                            continue;
+                    }
 
                     totalLogs++;
                     if (index >= skip && logs.Count < PageSize)
@@ -98,8 +116,9 @@ namespace LogWebViewer.Controllers
                 CurrentPage = page,
                 TotalPages = (int)Math.Ceiling(totalLogs / (double)PageSize),
                 FilterLevel = level,
-                FilterSource = source,
-                FilterFunction = function
+                FilterDescription = description,
+                FromTime = fromTime.HasValue ? DateTime.Today + fromTime.Value : (DateTime?)null,
+                ToTime = toTime.HasValue ? DateTime.Today + toTime.Value : (DateTime?)null
             };
 
             if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
